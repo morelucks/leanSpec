@@ -194,6 +194,25 @@ class ForkChoiceTest(BaseConsensusFixture):
         self.anchor_state = self.anchor_state.model_copy(
             update={"validators": Validators(data=updated_validators)}
         )
+        # Synchronize anchor state checkpoints with the modified anchor block.
+        #
+        # If the anchor is not genesis, its parent history may be unavailable.
+        # We ensure the state's trusted checkpoints point to the anchor block itself,
+        # preventing the store from trying to look up unknown historical roots.
+        anchor_root = hash_tree_root(self.anchor_block)
+        self.anchor_state = self.anchor_state.model_copy(
+            update={
+                "latest_justified": self.anchor_state.latest_justified.model_copy(
+                    update={"root": anchor_root}
+                ),
+                "latest_finalized": self.anchor_state.latest_finalized.model_copy(
+                    update={"root": anchor_root}
+                ),
+            }
+        )
+
+        # Updating validators and checkpoints changes the state root.
+        # We must update the anchor block to point to this final state.
         self.anchor_block = self.anchor_block.model_copy(
             update={"state_root": hash_tree_root(self.anchor_state)}
         )

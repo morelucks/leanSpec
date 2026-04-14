@@ -520,12 +520,18 @@ class Store(StrictBaseModel):
         )
 
         # Propagate any checkpoint advances from the post-state.
-        latest_justified = max(
-            post_state.latest_justified, self.latest_justified, key=lambda c: c.slot
-        )
-        latest_finalized = max(
-            post_state.latest_finalized, self.latest_finalized, key=lambda c: c.slot
-        )
+        #
+        # We only update if the new checkpoint represents a strictly later slot.
+        # This prevents "reverting" to unknown historical roots that might be
+        # present in the state but missing from the store's pruned block map
+        # (e.g., during checkpoint sync).
+        latest_justified = self.latest_justified
+        if post_state.latest_justified.slot > latest_justified.slot:
+            latest_justified = post_state.latest_justified
+
+        latest_finalized = self.latest_finalized
+        if post_state.latest_finalized.slot > latest_finalized.slot:
+            latest_finalized = post_state.latest_finalized
 
         store = self.model_copy(
             update={
